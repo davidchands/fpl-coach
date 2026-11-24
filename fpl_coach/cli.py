@@ -25,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--horizon", type=int, default=5, help="Gameweeks to look ahead (default 5)")
     a.add_argument("--free-transfers", type=int, help="Your free transfers (estimated if omitted)")
     a.add_argument("--bank", type=float, help="Money in the bank in £m (read from FPL if omitted)")
+    a.add_argument("--model", choices=["blend", "xg", "form"], default="blend",
+                   help="Projection model: underlying stats + form (blend, default), xg only, or form only")
     a.add_argument("--no-review", action="store_true", help="Skip the season review (fewer API calls)")
     a.add_argument("--json", action="store_true", help="Print the report as JSON")
     a.add_argument("--no-cache", action="store_true", help="Always fetch fresh data")
@@ -42,6 +44,7 @@ def main(argv: list[str] | None = None, client: FPLClient | None = None) -> int:
             free_transfers=args.free_transfers,
             bank=args.bank,
             review=not args.no_review,
+            model=args.model,
         )
     except FPLError as e:
         print(f"error: {e}", file=sys.stderr)

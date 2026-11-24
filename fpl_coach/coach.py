@@ -27,8 +27,9 @@ def analyze_team(
     free_transfers: int | None = None,
     bank: float | None = None,
     review: bool = True,
+    model: str = "blend",
 ) -> dict:
-    game = Game(client.bootstrap(), client.fixtures())
+    game = Game(client.bootstrap(), client.fixtures(), model=model)
     if game.current_gw == 0:
         raise FPLError("The season hasn't started yet, so there are no picks to analyse.")
 
@@ -69,6 +70,7 @@ def analyze_team(
             "free_transfers": free_transfers,
         },
         "horizon": gws,
+        "model": model,
         "squad": [asdict(r) for r in rows],
         "lineup": best_lineup(rows),
         "transfers": [asdict(t) for t in suggest_transfers(game, squad_ids, bank, free_transfers, gws)],

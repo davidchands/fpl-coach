@@ -3,6 +3,7 @@ API-shaped dicts, which keeps it easy to test and reuse (CLI, web app, MCP...)."
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import product
@@ -20,6 +21,39 @@ CHIP_LABELS = {
     "manager": "Assistant Manager",
 }
 
+# Opponent FDR also scales how many goals a team is expected to concede.
+DEFENCE_FACTOR = {1: 0.75, 2: 0.88, 3: 1.0, 4: 1.15, 5: 1.3}
+
+# Defensive-contribution actions needed in a match for the bonus (rules since 2025/26).
+DC_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12}
+
+# Share of the projection that comes from underlying stats in the default "blend" model.
+XG_WEIGHT = 0.6
+
+# Minutes of "average player" assumed when shrinking per-90 stats (about 5 full games).
+PRIOR_MINUTES = 450
+
+SHRUNK_STATS = (
+    "expected_goals_per_90",
+    "expected_assists_per_90",
+    "expected_goals_conceded_per_90",
+    "saves_per_90",
+    "defensive_contribution_per_90",
+)
+
+# Used when the API doesn't send game_config.scoring.
+DEFAULT_SCORING = {
+    "long_play": 2,
+    "goals_scored": {"GKP": 10, "DEF": 6, "MID": 5, "FWD": 4},
+    "assists": 3,
+    "clean_sheets": {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0},
+    "goals_conceded": {"GKP": -1, "DEF": -1, "MID": 0, "FWD": 0},
+    "saves": 1,
+    "defensive_contribution": {"GKP": 0, "DEF": 2, "MID": 2, "FWD": 2},
+}
+
+MODELS = ("blend", "xg", "form")
+
 MAX_PER_CLUB = 3
 HIT_COST = 4
 
@@ -30,8 +64,13 @@ HIT_COST = 4
 class Game:
     """Static game state: players, teams, gameweeks and fixtures."""
 
-    def __init__(self, bootstrap: dict, fixtures: list) -> None:
+    def __init__(self, bootstrap: dict, fixtures: list, model: str = "blend") -> None:
+        if model not in MODELS:
+            raise ValueError(f"model must be one of {MODELS}")
+        self.model = model
         self.players = {p["id"]: p for p in bootstrap["elements"]}
+        api_scoring = (bootstrap.get("game_config") or {}).get("scoring") or {}
+        self.scoring = {k: api_scoring.get(k, v) for k, v in DEFAULT_SCORING.items()}
         self.teams = {t["id"]: t for t in bootstrap["teams"]}
         self.events = bootstrap["events"]
         self.chips = bootstrap.get("chips", [])
@@ -52,6 +91,24 @@ class Game:
             self._fixtures[(f["team_a"], gw)].append(
                 {"opp": f["team_h"], "home": False, "fdr": f.get("team_a_difficulty", 3)}
             )
+
+        # Position averages (weighted by minutes) for players with a decent sample.
+        self.priors: dict[tuple[int, str], float] = {}
+        for etype in POSITIONS:
+            pool = [p for p in self.players.values() if p["element_type"] == etype and (p.get("minutes") or 0) >= 450]
+            mins = sum(p["minutes"] for p in pool)
+            for key in SHRUNK_STATS:
+                vals = [(float(p.get(key) or 0), p["minutes"]) for p in pool if p.get(key) is not None]
+                if vals and mins:
+                    self.priors[(etype, key)] = sum(v * m for v, m in vals) / sum(m for _, m in vals)
+
+    def shrunk(self, p: dict, key: str) -> float:
+        value = float(p.get(key) or 0)
+        prior = self.priors.get((p["element_type"], key))
+        if prior is None:
+            return value
+        mins = p.get("minutes") or 0
+        return (value * mins + prior * PRIOR_MINUTES) / (mins + PRIOR_MINUTES)
 
     def fixtures_for(self, team_id: int, gw: int) -> list[dict]:
         return self._fixtures.get((team_id, gw), [])
@@ -108,20 +165,95 @@ def base_rate(p: dict, game: Game) -> float:
     return rate * (0.4 + 0.6 * reliability(p, game))
 
 
+def _poisson_at_least(lam: float, k: int) -> float:
+    """P(X >= k) for X ~ Poisson(lam)."""
+    if lam <= 0:
+        return 0.0
+    term, cdf = math.exp(-lam), 0.0
+    for i in range(k):
+        cdf += term
+        term *= lam / (i + 1)
+    return max(0.0, 1.0 - cdf)
+
+
+def _poisson_floor_half(lam: float) -> float:
+    """E[floor(X/2)] for X ~ Poisson(lam): FPL's -1 per 2 goals conceded."""
+    term, total = math.exp(-lam), 0.0
+    for i in range(30):
+        total += term * (i // 2)
+        term *= lam / (i + 1)
+    return total
+
+
+def xg_points(p: dict, game: Game, fdr: int) -> float | None:
+    """Expected FPL points for 90 minutes against an opponent of difficulty `fdr`,
+    built from underlying stats: xG, xA, expected goals conceded, saves and
+    defensive contributions, scored with the game's own scoring rules.
+
+    Per-90 stats are shrunk towards the position average in proportion to
+    minutes played, so a striker with one lucky cameo doesn't top the charts.
+    Returns None when the API doesn't provide the underlying stats."""
+    if p.get("expected_goals_per_90") is None:
+        return None
+    pos = POSITIONS[p["element_type"]]
+    s = game.scoring
+    att = DIFFICULTY_FACTOR.get(fdr, 1.0)
+    dfn = DEFENCE_FACTOR.get(fdr, 1.0)
+
+    # Per-90 rates only apply for the minutes actually played: attackers are often
+    # subbed off around the hour mark, so scale by minutes per start.
+    starts = p.get("starts") or 0
+    share = min(1.0, (p.get("minutes") or 0) / (starts * 90)) if starts else 1.0
+
+    def stat(key: str) -> float:
+        return game.shrunk(p, key) * share
+
+    pts = s["long_play"]
+    pts += stat("expected_goals_per_90") * s["goals_scored"][pos] * att
+    pts += stat("expected_assists_per_90") * s["assists"] * att
+    conceded = stat("expected_goals_conceded_per_90") * dfn
+    pts += s["clean_sheets"][pos] * math.exp(-conceded)
+    pts += s["goals_conceded"][pos] * _poisson_floor_half(conceded)
+    if pos == "GKP":
+        pts += s["saves"] * max(0.0, stat("saves_per_90") / 3 - 1 / 3)
+    else:
+        threshold = DC_THRESHOLD[pos]
+        pts += s["defensive_contribution"][pos] * _poisson_at_least(stat("defensive_contribution_per_90"), threshold)
+    if starts:
+        pts += (p.get("bonus") or 0) / starts
+    return pts
+
+
+def fixture_points(p: dict, game: Game, fdr: int) -> float:
+    form_pts = base_rate(p, game) * DIFFICULTY_FACTOR.get(fdr, 1.0)
+    if game.model == "form":
+        return form_pts
+    xg = xg_points(p, game, fdr)
+    if xg is None:
+        return form_pts
+    # A non-starter earns roughly 1 point when he comes off the bench, 0 when he doesn't.
+    rel = reliability(p, game)
+    xg_pts = rel * xg + (1 - rel) * 0.5
+    if game.model == "xg":
+        return xg_pts
+    return XG_WEIGHT * xg_pts + (1 - XG_WEIGHT) * form_pts
+
+
 def project(p: dict, game: Game, gws: list[int]) -> list[float]:
     """Expected points per upcoming gameweek.
 
-    rate = (0.6*form + 0.4*points-per-game) scaled by how often the player starts,
-    multiplied by a fixture-difficulty factor for each fixture (doubles count
-    twice, blanks score 0) and by availability, which is assumed to recover
-    over the following weeks for flagged players.
+    Each fixture is scored by a blend of two models (see `fixture_points`):
+    - underlying stats (xG, xA, clean-sheet odds, saves, defensive contributions),
+    - recent output: 0.6*form + 0.4*points-per-game,
+    both scaled by fixture difficulty and by how often the player starts.
+    Doubles count twice, blanks score 0, and availability (chance of playing)
+    is assumed to recover over the following weeks for flagged players.
     """
-    rate = base_rate(p, game)
     avail = availability(p)
     out = []
     for i, gw in enumerate(gws):
         a = 1 - (1 - avail) * (0.6**i)
-        pts = sum(rate * DIFFICULTY_FACTOR.get(f["fdr"], 1.0) for f in game.fixtures_for(p["team"], gw))
+        pts = sum(fixture_points(p, game, f["fdr"]) for f in game.fixtures_for(p["team"], gw))
         out.append(round(pts * a, 2))
     return out
 

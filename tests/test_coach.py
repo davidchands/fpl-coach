@@ -145,3 +145,60 @@ def test_cli_text_and_json(client, capsys):
 def test_cli_bad_team(client, capsys):
     assert main(["analyze", "999"], client=client) == 1
     assert "error" in capsys.readouterr().err
+
+
+# --- underlying-stats model -------------------------------------------------
+def test_poisson_helpers():
+    assert A._poisson_at_least(0, 3) == 0
+    assert abs(A._poisson_at_least(10, 10) - 0.5421) < 1e-3
+    assert abs(A._poisson_floor_half(2.0) - 0.7546) < 1e-3  # E[floor(X/2)], X~Poisson(2)
+
+
+def test_xg_points_by_hand(client):
+    b = client.bootstrap()
+    fwd = dict(next(p for p in b["elements"] if p["element_type"] == 4), minutes=10**9)  # no shrinkage
+    fwd.update(expected_goals_per_90=0.6, expected_assists_per_90=0.1, defensive_contribution_per_90=0,
+               expected_goals_conceded_per_90=1.0, bonus=0, starts=10)
+    game = A.Game(b, client.fixtures())
+    # 2 (appearance) + 0.6*4 (goals) + 0.1*3 (assists) + 0 (no CS/DC points for forwards)
+    assert abs(A.xg_points(fwd, game, 3) - 4.7) < 1e-6
+    assert A.xg_points(fwd, game, 1) > A.xg_points(fwd, game, 5)
+
+
+def test_defender_clean_sheet_value(client):
+    b = client.bootstrap()
+    d = dict(next(p for p in b["elements"] if p["element_type"] == 2), minutes=10**9)
+    game = A.Game(b, client.fixtures())
+    leaky = A.xg_points(dict(d, expected_goals_conceded_per_90=2.5), game, 3)
+    tight = A.xg_points(dict(d, expected_goals_conceded_per_90=0.7), game, 3)
+    assert tight - leaky > 1.5
+
+
+def test_shrinkage_tames_small_samples(client):
+    b = client.bootstrap()
+    game = A.Game(b, client.fixtures())
+    cameo = dict(next(p for p in b["elements"] if p["element_type"] == 4), minutes=45, expected_goals_per_90=2.0)
+    assert game.shrunk(cameo, "expected_goals_per_90") < 0.4 * 2.0  # pulled most of the way to the average
+
+
+def test_models_fall_back_without_xg(client):
+    b = client.bootstrap()
+    for p in b["elements"]:
+        p.pop("expected_goals_per_90")
+    game = A.Game(b, client.fixtures(), model="xg")
+    p = b["elements"][0]
+    assert A.fixture_points(p, game, 3) == A.base_rate(p, game)
+
+
+def test_model_choice_changes_projection(client):
+    b, f = client.bootstrap(), client.fixtures()
+    p = b["elements"][3]
+    results = {m: A.project(p, A.Game(b, f, model=m), [11, 12]) for m in A.MODELS}
+    assert len({tuple(v) for v in results.values()}) == 3
+    with pytest.raises(ValueError):
+        A.Game(b, f, model="vibes")
+
+
+def test_cli_model_flag(client, capsys):
+    assert main(["analyze", "123", "--model", "xg", "--no-review"], client=client) == 0
+    assert "model: xg" in capsys.readouterr().out

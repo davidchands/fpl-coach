@@ -31,6 +31,7 @@ Options:
 | Flag | What it does |
 |---|---|
 | `--horizon 6` | Gameweeks to look ahead (default 5) |
+| `--model xg` | Projection model: `blend` (default), `xg` or `form` |
 | `--free-transfers 2` | Your free transfers (estimated from your history if omitted) |
 | `--bank 1.5` | Money in the bank in £m (read from FPL if omitted) |
 | `--no-review` | Skip the season review (much fewer API calls) |
@@ -67,16 +68,28 @@ print(report["lineup"]["captain"], report["transfers"][:3])
 
 ## How the projections work
 
-The model is intentionally simple and transparent, so it's easy to read and to improve:
+Each fixture is scored by two models, blended 60/40 by default (`--model blend`):
+
+**1. Underlying stats (`--model xg`)**: expected FPL points for a start, using the game's own scoring rules (read from the API, so rule changes are picked up automatically):
 
 ```
-rate   = (0.6 × form + 0.4 × points per game) × (0.4 + 0.6 × share of games started)
-xPts   = Σ over fixtures: rate × fixture factor(FDR)       # doubles count twice, blanks score 0
-factor = FDR 1: 1.25 · 2: 1.12 · 3: 1.00 · 4: 0.85 · 5: 0.70
-× availability (chance of playing), assumed to recover over the following weeks
+2 (appearance)
++ xG/90 × goal points (GK 10 · DEF 6 · MID 5 · FWD 4)  × attack factor(FDR)
++ xA/90 × 3                                             × attack factor(FDR)
++ clean-sheet points × P(0 conceded),  goals conceded ~ Poisson(xGC/90 × defence factor(FDR))
+− 1 × E[goals conceded ÷ 2]                (GK/DEF)
++ (saves/90 − 1) ÷ 3                        (GK)
++ 2 × P(defensive actions ≥ 10 DEF / 12 MID-FWD), actions ~ Poisson(per-90 rate)
++ bonus per start
 ```
 
-It's a decent baseline, not an oracle. Better models (expected goals and assists, minutes prediction, team strength) are the most valuable contributions. See the roadmap.
+Per-90 rates are shrunk towards the position average (worth ~450 minutes), so a 45-minute cameo with one big chance doesn't top the rankings, and are scaled by each player's real minutes per start.
+
+**2. Recent output (`--model form`)**: `(0.6 × form + 0.4 × points per game) × attack factor(FDR)`.
+
+Both are scaled by how often the player starts. Doubles count twice, blanks score 0, and flagged players' chance of playing is assumed to recover over the following weeks.
+
+**How good is it?** On 2026/27 data after 11 gameweeks, the underlying-stats model's points-per-start for 166 regular starters correlates **0.79** with what they actually scored per game. It runs about 0.3 pts high for midfielders and forwards (cards and early substitutions aren't modelled yet) and slightly low for goalkeepers (penalty saves). It's still a baseline, not an oracle: team strength, minutes prediction and set-piece duties are the obvious next steps.
 
 ## Limitations
 
@@ -87,7 +100,8 @@ It's a decent baseline, not an oracle. Better models (expected goals and assists
 
 ## Roadmap
 
-- [ ] Better projections: xG, xA and minutes models, team attack/defence strength
+- [x] Underlying-stats model (xG, xA, clean sheets, saves, defensive contributions)
+- [ ] Team attack/defence strength instead of FDR, minutes prediction, cards
 - [ ] Two-transfer and wildcard squad optimiser (ILP)
 - [ ] Mini-league comparison and effective ownership
 - [ ] Web app (paste your ID, get a report)

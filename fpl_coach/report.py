@@ -35,7 +35,7 @@ def render(report: dict) -> str:
     )
     gws = report["horizon"]
     if gws:
-        out.append(f"Looking ahead at GW{gws[0]}–GW{gws[-1]}.")
+        out.append(f"Looking ahead at GW{gws[0]}–GW{gws[-1]} (model: {report.get('model', 'blend')}).")
 
     # Squad
     out.append(heading("Squad health"))

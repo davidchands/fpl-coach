@@ -40,6 +40,12 @@ def make_bootstrap() -> dict:
                         "news": "",
                         "removed": False,
                         "can_select": True,
+                        "expected_goals_per_90": {1: 0, 2: 0.05, 3: 0.25, 4: 0.5}[etype] * (form / 5),
+                        "expected_assists_per_90": {1: 0, 2: 0.05, 3: 0.2, 4: 0.1}[etype] * (form / 5),
+                        "expected_goals_conceded_per_90": 1.0 + team["id"] / 10,
+                        "saves_per_90": 3.0 if etype == 1 else 0,
+                        "defensive_contribution_per_90": {1: 0, 2: 9.0, 3: 7.0, 4: 3.0}[etype],
+                        "bonus": int(form),
                     }
                 )
                 pid += 1
@@ -63,7 +69,12 @@ def make_bootstrap() -> dict:
         {"name": "3xc", "start_event": 1, "stop_event": 10},
         {"name": "3xc", "start_event": 11, "stop_event": 20},
     ]
-    return {"elements": elements, "teams": teams, "events": events, "chips": chips}
+    return {"elements": elements, "teams": teams, "events": events, "chips": chips,
+            "game_config": {"scoring": {"long_play": 2, "assists": 3, "saves": 1,
+                                        "goals_scored": {"GKP": 10, "DEF": 6, "MID": 5, "FWD": 4},
+                                        "clean_sheets": {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0},
+                                        "goals_conceded": {"GKP": -1, "DEF": -1, "MID": 0, "FWD": 0},
+                                        "defensive_contribution": {"GKP": 0, "DEF": 2, "MID": 2, "FWD": 2}}}}
 
 
 def make_fixtures() -> list:
