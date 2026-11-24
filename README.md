@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/davidchands/fpl-coach/actions/workflows/tests.yml"><img src="https://github.com/davidchands/fpl-coach/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/python-3.9%2B-3776ab" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/python-3.10%2B-3776ab" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="no dependencies">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
@@ -52,7 +52,7 @@ Which chips you still have and when they expire, upcoming double and blank gamew
 
 ## Quick start
 
-**1. Install** (Python 3.9 or newer, nothing else needed):
+**1. Install** (Python 3.10 or newer, nothing else needed):
 
 ```bash
 pip install git+https://github.com/davidchands/fpl-coach.git

@@ -62,14 +62,14 @@ def segments(line: str, heading: bool, header_row: bool):
     return out
 
 
-def render(text: str, path: str, title: str, scale: int = 2, size: int = 14) -> None:
+def render(text: str, path: str, title: str, scale: int = 2, size: int = 14, min_cols: int = 0) -> None:
     lines = text.rstrip("\n").split("\n")
     font = ImageFont.truetype(FONT, size * scale)
     bold = ImageFont.truetype(FONT_BOLD, size * scale)
     cw = font.getlength("M")
     lh = int(size * scale * 1.45)
     pad, bar = 22 * scale, 34 * scale
-    cols = max(len(l) for l in lines + [title])
+    cols = max([len(l) for l in lines + [title]] + [min_cols])
     w = int(cols * cw + 2 * pad)
     h = bar + pad + (len(lines) + 1) * lh + pad
 
@@ -107,5 +107,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--title", default="fpl-coach analyze 1234567")
+    ap.add_argument("--cols", type=int, default=0, help="Minimum width in characters (keeps images the same scale)")
     a = ap.parse_args()
-    render(sys.stdin.read(), a.out, a.title)
+    render(sys.stdin.read(), a.out, a.title, min_cols=a.cols)
