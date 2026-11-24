@@ -34,17 +34,17 @@
 ### 1. Squad health check
 Every player in your 15 rated: form, the next five fixtures with difficulty, projected points, and a warning for anything that should worry you (injuries, players who rarely start, poor form, tough runs, blank gameweeks).
 
-<img src="docs/images/squad.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
+<img src="docs/images/report-squad.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
 
 ### 2. Best lineup, captain and transfers
 The highest-scoring XI you can field next gameweek, your bench order and captain options. It also searches every player in the game for the best transfers within your budget and the 3-per-club rule, and accounts for the -4 if you don't have a free transfer.
 
-<img src="docs/images/lineup-transfers.png" alt="Suggested lineup, captain and transfer ideas" width="100%">
+<img src="docs/images/report-lineup-transfers.png" alt="Suggested lineup, captain and transfer ideas" width="100%">
 
 ### 3. Chips and season review
 Which chips you still have and when they expire, upcoming double and blank gameweeks, and an honest look back: points lost to hits, points left on your bench, and your costliest captain calls.
 
-<img src="docs/images/chips-review.png" alt="Chip planner and season review" width="100%">
+<img src="docs/images/report-chips-review.png" alt="Chip planner and season review" width="100%">
 
 > Screenshots are from a real 2026/27 team after Gameweek 11, anonymised.
 
