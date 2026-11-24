@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="240" viewBox="0 0 960 240">
+  <defs>
+    <linearGradient id="grass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f3d2a"/>
+      <stop offset="1" stop-color="#16573b"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="240" rx="16" fill="url(#grass)"/>
+  <!-- mown stripes -->
+  <g fill="#ffffff" opacity="0.035">
+    <rect x="0" y="0" width="80" height="240"/><rect x="160" y="0" width="80" height="240"/>
+    <rect x="320" y="0" width="80" height="240"/><rect x="480" y="0" width="80" height="240"/>
+    <rect x="640" y="0" width="80" height="240"/><rect x="800" y="0" width="80" height="240"/>
+  </g>
+  <!-- pitch markings -->
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2">
+    <rect x="16" y="16" width="928" height="208" rx="4"/>
+    <line x1="700" y1="16" x2="700" y2="224"/>
+    <circle cx="700" cy="120" r="52"/>
+    <rect x="864" y="62" width="80" height="116"/>
+    <rect x="912" y="94" width="32" height="52"/>
+  </g>
+  <circle cx="700" cy="120" r="4" fill="#ffffff" fill-opacity="0.3"/>
+  <!-- rising points line -->
+  <polyline points="790,196 815,184 838,188 860,158 883,146 905,112 925,98 935,60"
+            fill="none" stroke="#8ee6a8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="935" cy="60" r="7" fill="#8ee6a8"/>
+  <!-- text -->
+  <text x="56" y="112" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="64" font-weight="800" fill="#ffffff">fpl-coach</text>
+  <text x="58" y="152" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" fill="#d2f2dc">Free, open-source analysis for your Fantasy Premier League team</text>
+  <text x="58" y="188" font-family="'SFMono-Regular', Menlo, Consolas, monospace" font-size="18" fill="#8ee6a8">$ fpl-coach analyze &lt;your team ID&gt;</text>
+</svg>
