@@ -92,6 +92,24 @@ def test_free_transfer_estimate(client):
     assert A.estimate_free_transfers(history, 10) == 3
 
 
+def test_free_transfers_match_real_hits():
+    # Real pattern: wildcard in GW4, then 3 transfers in GW8 cost -8, so only 1 FT was banked.
+    made = {2: 1, 3: 1, 6: 2, 7: 1, 8: 3, 9: 1, 10: 1}
+    history = {"current": [{"event": g, "event_transfers": made.get(g, 0)} for g in range(1, 12)],
+               "chips": [{"name": "wildcard", "event": 4}]}
+    assert A.estimate_free_transfers(history, 7) == 1  # FTs available for GW8: 3 transfers -> -8
+    assert A.estimate_free_transfers(history, 11) == 2
+
+
+def test_captain_is_never_a_goalkeeper(game, client):
+    rows = A.squad_health(game, client.picks(123, 10)["picks"], game.upcoming_gws(5))
+    for r in rows:
+        if r.position == "GKP":
+            r.next_gw = 99.0
+    lu = A.best_lineup(rows)
+    assert all(not n.split("-")[1].startswith("G") for n, _ in lu["captain_options"])
+
+
 def test_chip_status(game, client):
     rows = A.squad_health(game, client.picks(123, 10)["picks"], game.upcoming_gws(8))
     chips = A.chip_status(game, client.history(123), rows)

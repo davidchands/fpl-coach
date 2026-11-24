@@ -93,11 +93,15 @@ def render(report: dict) -> str:
     # Chips
     ch = report["chips"]
     out.append(heading("Chips"))
-    if ch["available"]:
-        out.append("Available: " + ", ".join(
-            f"{c['chip']} (GW{c['from_gw']}–{c['until_gw']})" for c in ch["available"]))
+    next_gw = gws[0] if gws else 0
+    now = [c for c in ch["available"] if c["from_gw"] <= next_gw]
+    later = [c for c in ch["available"] if c["from_gw"] > next_gw]
+    if now:
+        out.append("Available now: " + ", ".join(f"{c['chip']} (until GW{c['until_gw']})" for c in now))
     else:
         out.append("No chips left in the current window.")
+    if later:
+        out.append("Later: " + ", ".join(f"{c['chip']} (GW{c['from_gw']}–{c['until_gw']})" for c in later))
     for gw, teams in ch["doubles"].items():
         out.append(f"Double GW{gw}: {', '.join(teams)}")
     for gw, teams in ch["blanks"].items():

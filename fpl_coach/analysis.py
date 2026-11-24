@@ -225,7 +225,7 @@ def best_lineup(rows: list[PlayerRow]) -> dict:
         (r for r in rows if r.id not in xi_ids and r.position != "GKP"), key=lambda r: r.next_gw, reverse=True
     )
     bench_gk = [r for r in rows if r.id not in xi_ids and r.position == "GKP"]
-    caps = sorted(xi, key=lambda r: r.next_gw, reverse=True)
+    caps = sorted((r for r in xi if r.position != "GKP"), key=lambda r: r.next_gw, reverse=True)
     current_xi = {r.id for r in rows if r.starting}
     return {
         "formation": formation,
@@ -259,7 +259,8 @@ class Transfer:
 
 def estimate_free_transfers(history: dict, current_gw: int, max_bank: int = 5) -> int:
     """Estimate free transfers for the next deadline (rules since 2024/25: +1 per
-    gameweek, up to 5 saved, saved transfers kept when a Wildcard/Free Hit is played).
+    gameweek, up to 5 saved; in a Wildcard/Free Hit week saved transfers are kept but
+    no new one is added).
     Real values can differ (e.g. special top-ups), so users can override this."""
     gws = {g["event"]: g for g in history.get("current", [])}
     chips = {c["event"]: c["name"] for c in history.get("chips", [])}
@@ -269,8 +270,9 @@ def estimate_free_transfers(history: dict, current_gw: int, max_bank: int = 5) -
     ft = 1
     for gw in range(start + 1, current_gw + 1):
         made = gws.get(gw, {}).get("event_transfers", 0)
-        remaining = ft if chips.get(gw) in ("wildcard", "freehit") else max(ft - made, 0)
-        ft = min(max_bank, remaining + 1)
+        if chips.get(gw) in ("wildcard", "freehit"):
+            continue
+        ft = min(max_bank, max(ft - made, 0) + 1)
     return ft
 
 
@@ -394,7 +396,7 @@ def season_review(game: Game, history: dict, picks_by_gw: dict[int, dict], live_
     best_gw = max(gws, key=lambda g: g["points"], default=None)
     worst_gw = min(gws, key=lambda g: g["points"], default=None)
     return {
-        "gameweeks": len(gws),
+        "gameweeks": len(vs_avg),
         "points_lost_to_hits": hits,
         "bench_points_wasted": bench,
         "captain_points_missed": captain_lost,
