@@ -18,6 +18,7 @@ from .analysis import (
     suggest_transfers,
 )
 from .api import FPLClient, FPLError
+from .chips import plan_chips
 from .planner import plan_gameweek
 
 
@@ -57,6 +58,8 @@ def analyze_team(
     rows = squad_health(game, picks["picks"], gws)
     squad_ids = [p["element"] for p in picks["picks"]]
 
+    plan = plan_gameweek(game, squad_ids, bank, free_transfers, gws, max_hits=max_hits)
+
     report = {
         "team": {
             "id": team_id,
@@ -74,7 +77,8 @@ def analyze_team(
         "horizon": gws,
         "model": model,
         "squad": [asdict(r) for r in rows],
-        "plan": asdict(plan_gameweek(game, squad_ids, bank, free_transfers, gws, max_hits=max_hits)),
+        "plan": asdict(plan),
+        "chip_plan": asdict(plan_chips(game, history, plan.final_squad or squad_ids, plan.bank_after)),
         "lineup": best_lineup(rows),
         "transfers": [asdict(t) for t in suggest_transfers(game, squad_ids, bank, free_transfers, gws)],
         "chips": chip_status(game, history, rows),

@@ -134,7 +134,7 @@ def test_season_review(client):
 def test_cli_text_and_json(client, capsys):
     assert main(["analyze", "123", "--free-transfers", "2"], client=client) == 0
     text = capsys.readouterr().out
-    for section in ("Squad health", "Your plan for GW", "More transfer ideas", "Chips", "Season review"):
+    for section in ("Squad health", "Your plan for GW", "More transfer ideas", "Chip plan", "Season review"):
         assert section in text
 
     assert main(["analyze", "123", "--json", "--no-review"], client=client) == 0
@@ -287,3 +287,68 @@ def test_report_has_plan_section(client, capsys):
     assert main(["analyze", "123", "--no-review"], client=client) == 0
     text = capsys.readouterr().out
     assert "Your plan for GW11" in text and "Start this XI" in text and "Captain" in text
+
+
+# --- chip planner -------------------------------------------------------------
+from fpl_coach import chips as C  # noqa: E402
+
+
+@pytest.fixture
+def chip_plan(game, client):
+    return C.plan_chips(game, client.history(123), client.squad, 1.5)
+
+
+def test_chip_plan_assigns_each_chip_to_a_distinct_week_before_expiry(chip_plan):
+    weeks = [a.gw for a in chip_plan.advice if a.gw]
+    assert len(weeks) == len(set(weeks))  # one chip per gameweek
+    for a in chip_plan.advice:
+        assert a.gw is None or a.gw <= a.window_end
+    labels = {a.label for a in chip_plan.advice}
+    assert labels == {"Wildcard", "Free Hit", "Bench Boost", "Triple Captain"}
+
+
+def test_chip_values_follow_doubles_and_blanks(chip_plan):
+    by_gw = {r["gw"]: r for r in chip_plan.weekly}
+    # Fake squad has four players from teams with a double in DGW13: the bench and captain gain.
+    assert by_gw[DOUBLE_GW]["3xc"] == max(r["3xc"] for r in chip_plan.weekly)
+    assert by_gw[DOUBLE_GW]["bboost"] == max(r["bboost"] for r in chip_plan.weekly)
+    # Blank GW14 hits several of the fake squad's teams: a Free Hit beats any normal week.
+    normal = [r["freehit"] for r in chip_plan.weekly if r["gw"] not in (DOUBLE_GW, BLANK_GW)]
+    assert by_gw[BLANK_GW]["freehit"] > max(normal)
+    assert by_gw[BLANK_GW]["your_xi"] < min(r["your_xi"] for r in chip_plan.weekly if r["gw"] != BLANK_GW)
+    # The double and the blank are the weeks the plan uses.
+    assert {DOUBLE_GW, BLANK_GW} <= {a.gw for a in chip_plan.advice}
+    assert DOUBLE_GW in chip_plan.doubles and BLANK_GW in chip_plan.blanks
+
+
+def test_chip_plan_this_week_message(chip_plan):
+    assert chip_plan.this_week.startswith(("Play your", "No chip this week"))
+
+
+def test_free_hit_squad_is_legal(game, client):
+    gws = game.upcoming_gws(1)
+    budget = sum(game.players[p]["now_cost"] for p in client.squad) + 15
+    pool = {}
+    for p in game.players.values():
+        if game.selectable(p):
+            pool.setdefault(p["element_type"], []).append(p["id"])
+    score = lambda s: P._best_xi([(game.players[p]["element_type"], A.project(game.players[p], game, gws)[0]) for p in s])[0]  # noqa: E731
+    squad = C.build_squad(game, budget, score, pool, start=client.squad)
+    assert len(squad) == 15 == len(set(squad))
+    assert Counter(game.players[p]["element_type"] for p in squad) == {1: 2, 2: 5, 3: 5, 4: 3}
+    assert max(Counter(game.players[p]["team"] for p in squad).values()) <= 3
+    assert sum(game.players[p]["now_cost"] for p in squad) <= budget
+    assert score(squad) >= score(client.squad)
+
+
+def test_unscheduled_weeks_are_not_blanks(client):
+    b, f = client.bootstrap(), [x for x in client.fixtures() if x["event"] != 18]
+    game = A.Game(b, f)
+    plan = C.plan_chips(game, client.history(123), client.squad, 1.5)
+    assert 18 not in plan.blanks
+
+
+def test_report_has_chip_plan(client, capsys):
+    assert main(["analyze", "123", "--no-review"], client=client) == 0
+    text = capsys.readouterr().out
+    assert "Chip plan" in text and "Expected gain from each chip" in text

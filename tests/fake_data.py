@@ -83,9 +83,9 @@ def make_fixtures() -> list:
     for gw in range(1, LAST_GW + 1):
         rot = ids[:1] + ids[1:][gw % 7:] + ids[1:][: gw % 7]
         pairs = [(rot[i], rot[-1 - i]) for i in range(len(rot) // 2)]
+        if gw == BLANK_GW:  # only the teams outside BLANK_TEAMS play
+            pairs = [(1, 2), (3, 4)]
         for h, a in pairs:
-            if gw == BLANK_GW and (h in BLANK_TEAMS or a in BLANK_TEAMS):
-                continue
             fixtures.append({"event": gw, "team_h": h, "team_a": a,
                              "team_h_difficulty": 2 + (a % 3), "team_a_difficulty": 2 + (h % 3)})
         if gw == DOUBLE_GW:

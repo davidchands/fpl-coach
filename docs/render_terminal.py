@@ -33,7 +33,7 @@ RULES = [  # (regex, colour, bold)
     (re.compile(r"unavailable|\d+% to play"), BAD, True),
     (re.compile(r"rarely starts|poor form|tough fixtures|blank next GW"), WARN, False),
     (re.compile(r"\(C\)|\(V\)"), ACCENT, True),
-    (re.compile(r"Captain:|Vice:|Formation \d-\d-\d:|Bench \(in order\):|Available now:|Later:"), ACCENT, True),
+    (re.compile(r"(?<!Triple )Captain:|Vice:|Formation \d-\d-\d:|Bench \(in order\):|Available now:|Later:"), ACCENT, True),
     (re.compile(r"^\d\. [^:]+:?|^\d\. Captain"), ACCENT, True),
     (re.compile(r"\bOUT\b"), BAD, True),
     (re.compile(r"\bIN\b"), GOOD, True),

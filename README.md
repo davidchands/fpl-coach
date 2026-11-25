@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <b>Type in your team ID and get a full report:</b> who to transfer, who to captain, when to play your chips, and where you've been losing points.<br>
+  <b>Type in your team ID and get a full report:</b> which transfers to make, who to start and captain, when to play each chip, and where you've been losing points.<br>
   No login. No password. No sign-up.
 </p>
 
@@ -36,17 +36,41 @@ A complete, ready-to-copy plan: **which transfers to make, who to start, the ben
 
 It searches every single transfer *and every pair of transfers*, so it finds moves like "sell an injured £7.6m striker for a £5.7m one, and use the money to upgrade a defender". Squads are judged by what they would actually score: the best starting XI plus captain in each of the next five gameweeks. Bench upgrades count for little, and the next few weeks count most. It only takes a **-4 hit when the gain clearly beats it** (by at least 2 points), and it saves your free transfer when nothing is worth making.
 
-<img src="docs/images/report-plan.png" alt="Gameweek plan with transfers, starting XI, bench order and captain" width="100%">
+<img src="docs/images/report-plan-v2.png" alt="Gameweek plan with transfers, starting XI, bench order and captain" width="100%">
 
 ### 2. Squad health check
 Every player in your 15 rated: form, the next five fixtures with difficulty, projected points, and a warning for anything that should worry you (injuries, players who rarely start, poor form, tough runs, blank gameweeks).
 
-<img src="docs/images/report-squad-v2.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
+<img src="docs/images/report-squad-v3.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
 
-### 3. Chips and season review
-Which chips you still have and when they expire, upcoming double and blank gameweeks, and an honest look back: points lost to hits, points left on your bench, and your costliest captain calls.
+### 3. Chip plan (and season review)
+Tells you **when to play each chip**, worked out in expected points instead of guesswork. For every gameweek a chip could still be played in, it calculates:
 
-<img src="docs/images/report-chips-review-v2.png" alt="Chip planner and season review" width="100%">
+| Chip | What it's worth in a given week |
+|---|---|
+| **Bench Boost** | Your four bench players' expected points |
+| **Triple Captain** | Your best captain's expected points (the extra 1×), ranked on underlying stats so it favours high-ceiling premiums over short hot streaks |
+| **Free Hit** | How much a squad built for that week alone (same budget) beats yours |
+| **Wildcard** | How much a fully rebuilt squad beats yours over the next 6 weeks |
+
+It then picks the best week for each chip, one chip per week, before each chip expires. It tells you whether to play one **this week**, and shows the full week-by-week table so you can see why. Below that is an honest look back at your season: points lost to hits, points left on your bench, and your costliest captain calls.
+
+<img src="docs/images/report-chips-v3.png" alt="Chip plan with recommended weeks, week-by-week chip values and season review" width="100%">
+
+<details>
+<summary><b>The research behind the chip planner</b></summary>
+
+The planner puts widely shared FPL strategy into numbers:
+
+- **Bench Boost and Triple Captain are worth most in double gameweeks**, when players get two matches. That's where they score highest in the planner too, because doubles count twice.
+- **Free Hit is the tool for blank gameweeks**, when several clubs don't play, or any week when many of your players face tough opponents at the same time. Analysts also endorse playing it aggressively in a big double, which the planner does when that's worth more.
+- **A first-half Triple Captain works best on a premium at home to a weak or newly promoted side.** For 2026/27, the official FPL site points to Haaland at home to promoted clubs. On a real squad the planner independently picked Haaland v Hull in GW16.
+- **Wildcard when the squad needs an overhaul**, or the week before a Bench Boost so all 15 players are set up for it.
+- **Rules:** one chip per gameweek. First-half chips must be played by the GW19 deadline or they're lost. A first Free Hit in GW19 rules out the second one in GW20.
+- Benchmark for flagging a "modest" chip week: a good Bench Boost or Triple Captain is worth roughly 15–25 points in a double gameweek.
+
+Sources: [premierleague.com: chips in 2026/27](https://www.premierleague.com/en/news/4679879/whats-happening-with-fpl-chips-in-202627) · [premierleague.com: two sets of chips](https://www.premierleague.com/en/news/4362027) · [Fantasy Football Scout: chip strategy](https://www.fantasyfootballscout.co.uk/2026/04/09/the-ultimate-fpl-chip-strategy-guide-for-all-16-scenarios) · [Fantasy Football Scout: quantifying chip impact](https://www.fantasyfootballscout.co.uk/2019/11/28/quantifying-the-impact-of-fpl-decisions-with-chip-season-arriving-earlier)
+</details>
 
 > Screenshots are from a real 2026/27 team after Gameweek 11, anonymised.
 
@@ -201,9 +225,11 @@ FPL switches off its API while it updates between gameweeks. Try again in an hou
 
 - [x] Squad health, lineup, captaincy, transfers, chips, season review
 - [x] Gameweek planner: best combination of transfers + starting XI + captain, hits only when worth it
+- [x] Chip planner: expected-points value of every chip in every week, best week for each
 - [x] Underlying-stats model (xG, xA, clean sheets, saves, defensive contributions)
 - [ ] Team attack/defence strength instead of FDR, minutes prediction, cards
-- [ ] Wildcard and Free Hit squad builder
+- [ ] Show the full Wildcard / Free Hit squad, not just its value
+- [ ] Chip planning that combines chips (e.g. Wildcard → Bench Boost)
 - [ ] Mini-league comparison and effective ownership
 - [ ] Web app: paste your ID, get the report in your browser
 - [ ] MCP server, so Claude and other AI assistants can analyse your team
@@ -230,6 +256,7 @@ The project is small on purpose:
 | `fpl_coach/api.py` | The only code that touches the network: fetching and caching |
 | `fpl_coach/analysis.py` | All the football logic, as pure functions: easy to test |
 | `fpl_coach/planner.py` | The gameweek planner: transfer search, lineup and captain |
+| `fpl_coach/chips.py` | The chip planner: chip values per week, squad builder, best timing |
 | `fpl_coach/coach.py` | Glues them together into one report |
 | `fpl_coach/report.py` · `cli.py` | Terminal output and command-line options |
 | `tests/` | A fake season that never calls the real API |

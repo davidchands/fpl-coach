@@ -58,6 +58,7 @@ class GameweekPlan:
     expected_points_no_transfers: float
     horizon_gain: float           # discounted xPts gained over the horizon, after hits
     reasoning: list[str] = field(default_factory=list)
+    final_squad: list[int] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +262,7 @@ def plan_gameweek(
         expected_points_no_transfers=round(before, 1),
         horizon_gain=round(value - base_value - hits * HIT_COST, 1),
         reasoning=reasoning,
+        final_squad=final_squad,
     )
 
 

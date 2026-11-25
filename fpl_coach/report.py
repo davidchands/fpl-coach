@@ -111,23 +111,42 @@ def render(report: dict) -> str:
         out.append("No single transfer clearly improves your squad. Rolling the transfer is fine.")
 
     # Chips
-    ch = report["chips"]
-    out.append(heading("Chips"))
-    next_gw = gws[0] if gws else 0
-    now = [c for c in ch["available"] if c["from_gw"] <= next_gw]
-    later = [c for c in ch["available"] if c["from_gw"] > next_gw]
-    if now:
-        out.append("Available now: " + ", ".join(f"{c['chip']} (until GW{c['until_gw']})" for c in now))
-    else:
-        out.append("No chips left in the current window.")
-    if later:
-        out.append("Later: " + ", ".join(f"{c['chip']} (GW{c['from_gw']}–{c['until_gw']})" for c in later))
-    for gw, teams in ch["doubles"].items():
-        out.append(f"Double GW{gw}: {', '.join(teams)}")
-    for gw, teams in ch["blanks"].items():
-        out.append(f"Blank GW{gw}: {', '.join(teams)}")
-    for tip in ch["tips"]:
-        out.append(f"  * {tip}")
+    cp = report.get("chip_plan")
+    out.append(heading("Chip plan"))
+    if cp:
+        out.append(cp["this_week"])
+        if cp["advice"]:
+            rows = []
+            for a in cp["advice"]:
+                when = f"GW{a['gw']}" if a["gw"] else "hold"
+                rows.append([a["label"], when + ("  <- this week" if a["play_now"] else ""),
+                             f"+{a['expected_gain']:.1f}", f"after GW{a['window_end']}"])
+            out.append(table(["Chip", "Play in", "xPts gain", "Expires"], rows, "llrl"))
+            for a in cp["advice"]:
+                out.append(f"  * {a['label']}: {a['why']}.")
+        if cp["weekly"]:
+            cols = ["GW", "Your XI", "Bench Boost", "Triple Captain"]
+            has_fh = any("freehit" in r for r in cp["weekly"])
+            has_wc = any("wildcard" in r for r in cp["weekly"])
+            cols += (["Free Hit"] if has_fh else []) + (["Wildcard"] if has_wc else [])
+            rows = []
+            for r in cp["weekly"]:
+                row = [f"GW{r['gw']}", f"{r['your_xi']:.1f}", f"+{r['bboost']:.1f}",
+                       f"+{r.get('3xc', 0):.1f} {r.get('3xc_player', '')}"]
+                if has_fh:
+                    row.append(f"+{r.get('freehit', 0):.1f}")
+                if has_wc:
+                    row.append(f"+{r.get('wildcard', 0):.1f}")
+                rows.append(row)
+            out.append("")
+            out.append("Expected gain from each chip, week by week:")
+            out.append(table(cols, rows, "lrrl" + "r" * (len(cols) - 4)))
+        for gw, teams in cp["doubles"].items():
+            out.append(f"Double GW{gw}: {', '.join(teams)}")
+        for gw, teams in cp["blanks"].items():
+            out.append(f"Blank GW{gw}: {', '.join(teams)}")
+        for n in cp["notes"]:
+            out.append(f"  * {n}")
 
     # Review
     rv = report.get("review")

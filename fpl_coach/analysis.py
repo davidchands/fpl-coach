@@ -581,6 +581,8 @@ def chip_status(game: Game, history: dict, rows: list[PlayerRow], horizon: int =
     doubles, blanks = {}, {}
     for gw in game.upcoming_gws(horizon):
         counts = {t: len(game.fixtures_for(t, gw)) for t in game.teams}
+        if not any(counts.values()):  # nothing scheduled yet: unknown, not a blank
+            continue
         d = [game.team_short(t) for t, n in counts.items() if n >= 2]
         b = [game.team_short(t) for t, n in counts.items() if n == 0]
         if d:
