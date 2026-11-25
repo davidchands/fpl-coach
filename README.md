@@ -31,17 +31,29 @@
 
 ## What you get
 
-### 1. Your plan for next gameweek
-A complete, ready-to-copy plan: **which transfers to make, who to start, the bench order and who to captain.**
+### 1. Your plan for next gameweek, with reasons
+A complete, ready-to-copy plan: **which transfers to make, who to start, the bench order and who to captain**, and **why**.
 
-It searches every single transfer *and every pair of transfers*, so it finds moves like "sell an injured £7.6m striker for a £5.7m one, and use the money to upgrade a defender". Squads are judged by what they would actually score: the best starting XI plus captain in each of the next five gameweeks. Bench upgrades count for little, and the next few weeks count most. It only takes a **-4 hit when the gain clearly beats it** (by at least 2 points), and it saves your free transfer when nothing is worth making.
+Every transfer comes with:
+- ✗ **why to sell** (injury, rarely starting, poor form, tough fixtures, points running ahead of his stats…)
+- ✓ **why to buy** (form, minutes, xG/xA compared with others in his position, clean-sheet odds, fixtures, price…)
+- ⚠ **anything to watch out for** (a hot streak that may cool off, a small sample, a knock)
+- a **week-by-week comparison** and a **confidence** rating (high / medium / low)
 
-<img src="docs/images/report-plan-v2.png" alt="Gameweek plan with transfers, starting XI, bench order and captain" width="100%">
+It's built for **consistent points, not one lucky week**:
+- It plans **at least 6 gameweeks ahead**, so a move that helps next week but costs you later is seen for what it is.
+- It **penalises any plan that makes a week worse** than your current team, and shows you a gameweek-by-gameweek "now vs with plan" table to prove it.
+- Decisions use **confidence-adjusted** projections. Proven starters whose points are backed by underlying stats beat hot streaks and players with few minutes, and the same goes for picking the captain.
+- It searches every single transfer *and every pair* (so it finds "sell an injured £7.6m striker for a £5.7m one and use the money to upgrade a defender"), takes a **-4 only when the gain clearly beats it**, and saves your free transfer when nothing is worth making.
+
+<img src="docs/images/colour-plan.png" alt="Gameweek plan with explained transfers, week-by-week gains, starting XI, captain and per-gameweek impact" width="100%">
 
 ### 2. Squad health check
 Every player in your 15 rated: form, the next five fixtures with difficulty, projected points, and a warning for anything that should worry you (injuries, players who rarely start, poor form, tough runs, blank gameweeks).
 
-<img src="docs/images/report-squad-v3.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
+The terminal output is **colour-coded** so it's quick to read. Fixtures are coloured like on the FPL website (**green** = easy, white = average, **red** = hard), along with gains and losses, form, injuries and your captain. Colour switches off automatically when you save the output to a file. Use `--no-color` to turn it off, or set `NO_COLOR=1`.
+
+<img src="docs/images/colour-squad.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
 
 ### 3. Chip plan (and season review)
 Tells you **when to play each chip**, worked out in expected points instead of guesswork. For every gameweek a chip could still be played in, it calculates:
@@ -55,7 +67,7 @@ Tells you **when to play each chip**, worked out in expected points instead of g
 
 It then picks the best week for each chip, one chip per week, before each chip expires. It tells you whether to play one **this week**, and shows the full week-by-week table so you can see why. Below that is an honest look back at your season: points lost to hits, points left on your bench, and your costliest captain calls.
 
-<img src="docs/images/report-chips-v3.png" alt="Chip plan with recommended weeks, week-by-week chip values and season review" width="100%">
+<img src="docs/images/colour-chips.png" alt="Chip plan with recommended weeks, week-by-week chip values and season review" width="100%">
 
 <details>
 <summary><b>The research behind the chip planner</b></summary>
@@ -113,6 +125,7 @@ That's it. The first run takes a few seconds while it downloads your season. Aft
 | `--model xg` | Projection model: `blend` (default), `xg` or `form`. See [How it works](#how-it-works) |
 | `--no-review` | Skip the season review (much faster, fewer requests) |
 | `--json` | Print everything as JSON, to feed your own tools |
+| `--no-color` | Plain text, no colours (also when output goes to a file, or with `NO_COLOR=1`) |
 | `--no-cache` | Ignore the cache and fetch fresh data |
 
 Examples:
@@ -226,6 +239,7 @@ FPL switches off its API while it updates between gameweeks. Try again in an hou
 - [x] Squad health, lineup, captaincy, transfers, chips, season review
 - [x] Gameweek planner: best combination of transfers + starting XI + captain, hits only when worth it
 - [x] Chip planner: expected-points value of every chip in every week, best week for each
+- [x] Explained transfers, confidence ratings, consistency-first planning, colour output
 - [x] Underlying-stats model (xG, xA, clean sheets, saves, defensive contributions)
 - [ ] Team attack/defence strength instead of FDR, minutes prediction, cards
 - [ ] Show the full Wildcard / Free Hit squad, not just its value
@@ -258,10 +272,10 @@ The project is small on purpose:
 | `fpl_coach/planner.py` | The gameweek planner: transfer search, lineup and captain |
 | `fpl_coach/chips.py` | The chip planner: chip values per week, squad builder, best timing |
 | `fpl_coach/coach.py` | Glues them together into one report |
-| `fpl_coach/report.py` · `cli.py` | Terminal output and command-line options |
+| `fpl_coach/report.py` · `style.py` · `cli.py` | Terminal output, colours and command-line options |
 | `tests/` | A fake season that never calls the real API |
 
-To refresh the README screenshots: `fpl-coach analyze <id> | python docs/render_terminal.py docs/images/report.png`.
+To refresh the README screenshots: `fpl-coach analyze <id> --color | python docs/render_terminal.py docs/images/report.png`.
 
 ---
 

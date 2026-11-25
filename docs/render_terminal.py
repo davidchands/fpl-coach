@@ -1,6 +1,8 @@
 """Render fpl-coach text output as a terminal-window PNG for the README.
 
-    fpl-coach analyze 1234567 | python docs/render_terminal.py out.png --title "fpl-coach analyze 1234567"
+    fpl-coach analyze 1234567 --color | python docs/render_terminal.py out.png
+
+With --color the real terminal colours are used; plain text falls back to simple highlighting rules.
 
 Colouring mimics a terminal theme: headings, gains, flags and captaincy are highlighted.
 """
@@ -66,14 +68,45 @@ def segments(line: str, heading: bool, header_row: bool):
     return out
 
 
+ANSI = re.compile(r"\x1b\[([0-9;]*)m")
+PALETTE = {
+    "31": (240, 110, 110), "32": (136, 214, 120), "33": (240, 190, 100), "34": (122, 178, 247),
+    "35": (199, 146, 234), "36": (110, 200, 220), "37": (214, 218, 226),
+    "91": (255, 120, 120), "92": (136, 220, 120), "93": (245, 200, 100), "94": (122, 178, 247),
+    "95": (214, 140, 245), "96": (120, 214, 230),
+}
+
+
+def ansi_segments(line: str):
+    """Split a line with ANSI colour codes into (text, colour, bold) segments."""
+    out, pos, colour, bold, dim = [], 0, FG, False, False
+    for m in ANSI.finditer(line):
+        if m.start() > pos:
+            out.append((line[pos:m.start()], DIM if dim and colour == FG else colour, bold))
+        for code in (m.group(1) or "0").split(";"):
+            if code in ("0", ""):
+                colour, bold, dim = FG, False, False
+            elif code == "1":
+                bold = True
+            elif code == "2":
+                dim = True
+            elif code in PALETTE:
+                colour = PALETTE[code]
+        pos = m.end()
+    if pos < len(line):
+        out.append((line[pos:], DIM if dim and colour == FG else colour, bold))
+    return out
+
+
 def render(text: str, path: str, title: str, scale: int = 2, size: int = 14, min_cols: int = 0) -> None:
+    has_ansi = "\x1b[" in text
     lines = text.rstrip("\n").split("\n")
     font = ImageFont.truetype(FONT, size * scale)
     bold = ImageFont.truetype(FONT_BOLD, size * scale)
     cw = font.getlength("M")
     lh = int(size * scale * 1.45)
     pad, bar = 22 * scale, 34 * scale
-    cols = max([len(l) for l in lines + [title]] + [min_cols])
+    cols = max([len(ANSI.sub("", l)) for l in lines + [title]] + [min_cols])
     w = int(cols * cw + 2 * pad)
     h = bar + pad + (len(lines) + 1) * lh + pad
 
@@ -90,11 +123,12 @@ def render(text: str, path: str, title: str, scale: int = 2, size: int = 14, min
     d.text((pad + 2 * cw, y), title, font=bold, fill=FG)
     y += lh
     for i, line in enumerate(lines):
-        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        nxt = ANSI.sub("", lines[i + 1]) if i + 1 < len(lines) else ""
         heading = bool(line.strip()) and set(nxt.strip()) == {"="}
         header_row = bool(line.strip()) and nxt.startswith("---")
         x = pad
-        for seg, colour, is_bold in segments(line, heading, header_row):
+        segs = ansi_segments(line) if has_ansi else segments(line, heading, header_row)
+        for seg, colour, is_bold in segs:
             d.text((x, y), seg, font=bold if is_bold else font, fill=colour)
             x += cw * len(seg)
         y += lh

@@ -10,6 +10,7 @@ from . import __version__
 from .api import FPLClient, FPLError
 from .coach import analyze_team
 from .report import render
+from .style import should_color
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Most -4 hits the plan may take (default 1, 0 = never take a hit)")
     a.add_argument("--no-review", action="store_true", help="Skip the season review (fewer API calls)")
     a.add_argument("--json", action="store_true", help="Print the report as JSON")
+    colour = a.add_mutually_exclusive_group()
+    colour.add_argument("--color", "--colour", dest="color", action="store_true", default=None,
+                        help="Force coloured output (default: colour when printing to a terminal)")
+    colour.add_argument("--no-color", "--no-colour", dest="color", action="store_false",
+                        help="Plain text output")
     a.add_argument("--no-cache", action="store_true", help="Always fetch fresh data")
     return parser
 
@@ -52,7 +58,10 @@ def main(argv: list[str] | None = None, client: FPLClient | None = None) -> int:
     except FPLError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2) if args.json else render(report))
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(render(report, color=should_color(sys.stdout, args.color)), end="")
     return 0
 
 

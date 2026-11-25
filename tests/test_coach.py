@@ -352,3 +352,76 @@ def test_report_has_chip_plan(client, capsys):
     assert main(["analyze", "123", "--no-review"], client=client) == 0
     text = capsys.readouterr().out
     assert "Chip plan" in text and "Expected gain from each chip" in text
+
+
+# --- consistency, explanations and colour -----------------------------------
+from fpl_coach.report import render, table  # noqa: E402
+from fpl_coach.style import Style, strip, visible_len  # noqa: E402
+
+
+def test_confidence_prefers_proven_players(game):
+    p = dict(next(x for x in game.players.values() if x["element_type"] == 3 and x["starts"] == 10))
+    proven, _ = A.confidence(p, game)
+    cameo, note = A.confidence(dict(p, minutes=120, starts=1), game)
+    assert proven > cameo and "small sample" in note
+    hot, note = A.confidence(dict(p, form="12.0", points_per_game="10.0"), game)
+    assert hot < proven and "cool off" in note
+    assert A.confidence_label(proven) in ("high", "medium")
+    assert all(r <= x + 1e-9 for r, x in zip(A.risk_adjusted(p, game, [11, 12]), A.project(p, game, [11, 12])))
+
+
+def test_plan_looks_far_enough_ahead_and_avoids_bad_weeks(game, client):
+    plan = P.plan_gameweek(game, client.squad, 1.5, 2, game.upcoming_gws(3), max_hits=1)
+    assert len(plan.impact) >= P.PLAN_MIN_HORIZON
+    # after the first week (which carries any hit), no week should get clearly worse
+    for week in plan.impact[1:]:
+        assert week["after"] >= week["before"] - 1.0
+
+
+def test_every_transfer_is_explained(game, client):
+    plan = P.plan_gameweek(game, client.squad, 1.5, 2, game.upcoming_gws(5), max_hits=1)
+    assert plan.transfers
+    for t in plan.transfers:
+        assert t.out_reasons and t.in_reasons and t.summary
+        assert len(t.weekly) == len(plan.impact)
+        assert t.confidence in ("high", "medium", "low")
+        assert not any("cool off" in r for r in t.in_reasons)  # warnings live in cautions
+    assert plan.captain_reason.startswith(plan.captain)
+
+
+def test_downside_penalty_prefers_steady_over_boom_and_bust():
+    class G:  # minimal stand-in for Game
+        players = {i: {"element_type": et} for i, et in enumerate([1, 1] + [2] * 5 + [3] * 5 + [4] * 3)}
+    squad = list(G.players)
+    current = {i: [4.0, 4.0] for i in squad}   # what you have now
+    steady = {i: [4.5, 4.5] for i in squad}    # a bit better every week
+    spiky = {i: [5.5, 3.5] for i in squad}     # same total, but great next week and worse than now after
+    base = P.weekly_xi(squad, G, current)
+    # Without the penalty, the front-loaded plan looks better (later weeks are discounted)...
+    assert P.squad_value(squad, G, spiky) > P.squad_value(squad, G, steady)
+    # ...with it, the steady plan wins because the boom-and-bust one makes a week worse than now.
+    assert P.squad_value(squad, G, spiky, base) < P.squad_value(squad, G, steady, base)
+
+
+def test_colour_on_and_off(client):
+    report = analyze_team(client, 123, review=False)
+    coloured, plain = render(report, color=True), render(report, color=False)
+    assert "\x1b[" in coloured and "\x1b[" not in plain
+    assert strip(coloured) == plain  # colour never changes the text or the alignment
+
+
+def test_table_aligns_coloured_cells():
+    s = Style(True)
+    out = table(["A", "B"], [[s("x", "bred"), "1"], ["yyy", s("22", "bgreen")]], "lr", s)
+    widths = {visible_len(line) for line in out.split("\n")}
+    assert len(widths) == 1
+
+
+def test_cli_colour_flags(client, capsys, monkeypatch):
+    assert main(["analyze", "123", "--no-review", "--color"], client=client) == 0
+    assert "\x1b[" in capsys.readouterr().out
+    assert main(["analyze", "123", "--no-review", "--no-color"], client=client) == 0
+    assert "\x1b[" not in capsys.readouterr().out
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert main(["analyze", "123", "--no-review"], client=client) == 0
+    assert "\x1b[" not in capsys.readouterr().out

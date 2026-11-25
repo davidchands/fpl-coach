@@ -253,6 +253,54 @@ def fixture_points(p: dict, game: Game, fdr: int) -> float:
     return XG_WEIGHT * xg_pts + (1 - XG_WEIGHT) * form_pts
 
 
+RISK_WEIGHT = 0.4  # how strongly low confidence lowers a projection when making decisions
+
+
+def confidence(p: dict, game: Game) -> tuple[float, str]:
+    """How much to trust a player's projection, 0-1, plus a short explanation.
+
+    Built from three things:
+    - sample size: minutes played (about 10 full games is a solid sample),
+    - nailedness: share of games started,
+    - agreement: whether recent points are backed by underlying stats. A player
+      scoring far above his xG/xA tends to cool off; one far below tends to bounce back.
+    """
+    mins = p.get("minutes") or 0
+    sample = min(1.0, mins / 900)
+    rel = reliability(p, game)
+    form_pts = base_rate(p, game)
+    xg = xg_points(p, game, 3)
+    agree, note = 1.0, ""
+    if xg is not None:
+        xg_pts = rel * xg + (1 - rel) * 0.5
+        top = max(form_pts, xg_pts)
+        if top > 0:
+            diff = (form_pts - xg_pts) / top
+            agree = 1 - min(1.0, abs(diff))
+            if diff > 0.3:
+                note = "points running ahead of his underlying stats (may cool off)"
+            elif diff < -0.3:
+                note = "underlying stats better than recent points (due a rise)"
+            else:
+                note = "form backed by underlying stats"
+    conf = 0.4 * sample + 0.3 * rel + 0.3 * agree
+    if mins < 450:
+        note = (note + "; " if note else "") + f"small sample ({mins} mins)"
+    return round(conf, 2), note
+
+
+def confidence_label(conf: float) -> str:
+    return "high" if conf >= 0.8 else "medium" if conf >= 0.6 else "low"
+
+
+def risk_adjusted(p: dict, game: Game, gws: list[int]) -> list[float]:
+    """Projection shaded down for players we're less sure about: used for decisions,
+    so the planner prefers steady, proven points over hot streaks and tiny samples."""
+    conf, _ = confidence(p, game)
+    factor = 1 - RISK_WEIGHT * (1 - conf)
+    return [round(x * factor, 2) for x in project(p, game, gws)]
+
+
 def project(p: dict, game: Game, gws: list[int]) -> list[float]:
     """Expected points per upcoming gameweek.
 
