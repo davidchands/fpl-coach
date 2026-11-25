@@ -60,20 +60,40 @@ def render(report: dict) -> str:
     if news:
         out.append("News:\n" + "\n".join(news))
 
-    # Lineup
-    lu = report["lineup"]
-    if lu.get("formation"):
-        out.append(heading(f"Best lineup for GW{gws[0] if gws else '?'}"))
-        out.append(f"Formation {lu['formation']}: {', '.join(lu['starting'])}")
-        out.append(f"Bench (in order): {', '.join(lu['bench'])}")
-        caps = ", ".join(f"{n} ({x:.1f})" for n, x in lu["captain_options"])
-        out.append(f"Captain: {lu['captain']}  |  Vice: {lu['vice']}  |  Top options: {caps}")
-        if lu["changes_in"]:
-            out.append(f"Changes vs your current XI: start {', '.join(lu['changes_in'])}; "
-                       f"bench {', '.join(lu['changes_out'])}.")
+    # Plan for next gameweek
+    pl = report.get("plan")
+    if pl and pl.get("formation"):
+        out.append(heading(f"Your plan for GW{pl['gw']}"))
+        if pl["transfers"]:
+            out.append("1. Make these transfers:")
+            for t in pl["transfers"]:
+                out.append(f"     OUT {t['out']} ({t['out_team']}, £{t['price_out']:.1f}m)  ->  "
+                           f"IN {t['into']} ({t['into_team']}, £{t['price_in']:.1f}m)")
+            cost = f"-{pl['hit_cost']} hit" if pl["hits"] else "no hit"
+            out.append(f"   Uses {pl['free_transfers_used']} free transfer(s), {cost}, "
+                       f"£{pl['bank_after']:.1f}m left in the bank.")
+        else:
+            out.append("1. No transfers: save your free transfer.")
+        out.append(f"2. Start this XI ({pl['formation']}):")
+        by_pos: dict = {}
+        for p in pl["starting"]:
+            by_pos.setdefault(p["position"], []).append(p)
+        for pos in ("GKP", "DEF", "MID", "FWD"):
+            names = []
+            for p in by_pos.get(pos, []):
+                tag = " (C)" if p["name"] == pl["captain"] else " (V)" if p["name"] == pl["vice"] else ""
+                names.append(f"{p['name']}{tag} {p['xpts']:.1f}")
+            out.append(f"     {pos}  " + "  ·  ".join(names))
+        out.append("   Bench (in order): " + ", ".join(p["name"] for p in pl["bench"]))
+        out.append(f"3. Captain {pl['captain']}, vice {pl['vice']}.")
+        delta = pl["expected_points"] - pl["expected_points_no_transfers"]
+        out.append(f"Expected GW{pl['gw']} points: {pl['expected_points']:.1f} "
+                   f"({delta:+.1f} vs your best XI without transfers, after hits).")
+        for r in pl["reasoning"]:
+            out.append(f"  * {r}")
 
     # Transfers
-    out.append(heading("Transfer ideas"))
+    out.append(heading("More transfer ideas"))
     if report["transfers"]:
         rows = [
             [
@@ -86,7 +106,7 @@ def render(report: dict) -> str:
             for tr in report["transfers"]
         ]
         out.append(table(["Pos", "Out", "In", "xPts gain", "Net"], rows, "lllrr"))
-        out.append("Each row is a single transfer within your budget. Don't take a hit for less than ~+4.")
+        out.append("Other single transfers worth considering, each on its own within your budget.")
     else:
         out.append("No single transfer clearly improves your squad. Rolling the transfer is fine.")
 

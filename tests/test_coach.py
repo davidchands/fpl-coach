@@ -134,7 +134,7 @@ def test_season_review(client):
 def test_cli_text_and_json(client, capsys):
     assert main(["analyze", "123", "--free-transfers", "2"], client=client) == 0
     text = capsys.readouterr().out
-    for section in ("Squad health", "Best lineup", "Transfer ideas", "Chips", "Season review"):
+    for section in ("Squad health", "Your plan for GW", "More transfer ideas", "Chips", "Season review"):
         assert section in text
 
     assert main(["analyze", "123", "--json", "--no-review"], client=client) == 0
@@ -202,3 +202,88 @@ def test_model_choice_changes_projection(client):
 def test_cli_model_flag(client, capsys):
     assert main(["analyze", "123", "--model", "xg", "--no-review"], client=client) == 0
     assert "model: xg" in capsys.readouterr().out
+
+
+# --- gameweek planner -------------------------------------------------------
+from fpl_coach import planner as P  # noqa: E402
+
+
+def test_best_xi_picks_formation_and_doubles_captain():
+    players = [(1, 5), (1, 1)] + [(2, x) for x in (6, 5, 4, 1, 1)] + [(3, x) for x in (8, 3, 3, 2, 2)] + [(4, x) for x in (7, 1, 1)]
+    score, formation, bench = P._best_xi(players)
+    # best: GK 5 + DEF 6,5,4 + MID 8,3,3,2 + FWD 7,1  -> 3-4-3 = 44, +8 captain
+    # Best 10 outfielders within the rules: 8,7,6,5,4,3,3,2,2,1 = 41; + GK 5 + captain 8 (doubles the 8)
+    assert sum(formation) == 10 and formation[0] >= 3
+    assert score == 54
+    assert bench == sum(p for _, p in players) - (54 - 8)
+
+
+def _check_plan_is_legal(plan, game, squad, bank):
+    ids_by_name = {p["web_name"]: p for p in game.players.values()}
+    out = [ids_by_name[t.out] for t in plan.transfers]
+    inn = [ids_by_name[t.into] for t in plan.transfers]
+    final = [pid for pid in squad if pid not in {p["id"] for p in out}] + [p["id"] for p in inn]
+    assert len(final) == 15 == len(set(final))
+    assert sum(p["now_cost"] for p in inn) <= sum(p["now_cost"] for p in out) + round(bank * 10)
+    assert Counter(game.players[pid]["element_type"] for pid in final) == {1: 2, 2: 5, 3: 5, 4: 3}
+    assert max(Counter(game.players[pid]["team"] for pid in final).values()) <= 3
+    assert len(plan.starting) == 11 and len(plan.bench) == 4
+    d, m, f = map(int, plan.formation.split("-"))
+    assert d + m + f == 10 and 3 <= d <= 5 and 2 <= m <= 5 and 1 <= f <= 3
+    starters = {p["name"] for p in plan.starting}
+    assert plan.captain in starters and plan.vice in starters and plan.captain != plan.vice
+    assert all(p["position"] != "GKP" for p in plan.starting if p["name"] == plan.captain)
+    assert {p["name"] for p in plan.starting + plan.bench} == {game.players[pid]["web_name"] for pid in final}
+
+
+@pytest.mark.parametrize("fts,max_hits", [(0, 0), (1, 0), (1, 1), (2, 1), (3, 0)])
+def test_plan_is_always_legal(game, client, fts, max_hits):
+    plan = P.plan_gameweek(game, client.squad, 1.5, fts, game.upcoming_gws(5), max_hits=max_hits)
+    _check_plan_is_legal(plan, game, client.squad, 1.5)
+    assert len(plan.transfers) <= fts + max_hits
+    assert plan.hits == max(0, len(plan.transfers) - fts)
+
+
+def test_plan_never_hits_when_disallowed(game, client):
+    plan = P.plan_gameweek(game, client.squad, 1.5, 0, game.upcoming_gws(5), max_hits=0)
+    assert plan.transfers == [] and plan.hits == 0
+
+
+def test_plan_rolls_transfer_when_nothing_is_better(client):
+    b = client.bootstrap()
+    squad = set(client.squad)
+    for p in b["elements"]:
+        if p["id"] not in squad:  # everyone outside the squad is useless
+            p.update(form="0", points_per_game="0", starts=0, minutes=0, expected_goals_per_90=0,
+                     expected_assists_per_90=0, expected_goals_conceded_per_90=3, bonus=0)
+    game = A.Game(b, client.fixtures())
+    plan = P.plan_gameweek(game, client.squad, 1.5, 1, game.upcoming_gws(5))
+    assert plan.transfers == []
+    assert any("save your free transfer" in r for r in plan.reasoning)
+
+
+def test_plan_takes_worthwhile_hit_and_never_starts_injured(client):
+    b = client.bootstrap()
+    game = A.Game(b, client.fixtures())
+    # Make the squad's best forward a long-term injury: replacing him should beat a -4.
+    fwd = max((pid for pid in client.squad if game.players[pid]["element_type"] == 4),
+              key=lambda pid: float(game.players[pid]["form"]))
+    game.players[fwd].update(status="i", chance_of_playing_next_round=0, news="Knee injury - Unknown return date")
+    hit = P.plan_gameweek(game, client.squad, 1.5, 0, game.upcoming_gws(5), max_hits=1)
+    assert hit.hits == 1 and hit.horizon_gain > P.HIT_MARGIN  # the -4 is clearly worth it
+    for plan in (hit, P.plan_gameweek(game, client.squad, 1.5, 3, game.upcoming_gws(5), max_hits=0)):
+        assert game.players[fwd]["web_name"] not in {p["name"] for p in plan.starting}
+
+
+def test_long_injuries_recover_slowly(game):
+    p = dict(next(iter(game.players.values())), status="i", chance_of_playing_next_round=0)
+    knock = A.project(dict(p, news="Hamstring injury - 25% chance of playing"), game, [11, 12, 13, 14])
+    long = A.project(dict(p, news="Knee injury - Unknown return date"), game, [11, 12, 13, 14])
+    gone = A.project(dict(p, status="u", news="Joined another club"), game, [11, 12, 13, 14])
+    assert sum(gone) == 0 < sum(long) < sum(knock)
+
+
+def test_report_has_plan_section(client, capsys):
+    assert main(["analyze", "123", "--no-review"], client=client) == 0
+    text = capsys.readouterr().out
+    assert "Your plan for GW11" in text and "Start this XI" in text and "Captain" in text

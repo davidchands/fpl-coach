@@ -34,6 +34,10 @@ RULES = [  # (regex, colour, bold)
     (re.compile(r"rarely starts|poor form|tough fixtures|blank next GW"), WARN, False),
     (re.compile(r"\(C\)|\(V\)"), ACCENT, True),
     (re.compile(r"Captain:|Vice:|Formation \d-\d-\d:|Bench \(in order\):|Available now:|Later:"), ACCENT, True),
+    (re.compile(r"^\d\. [^:]+:?|^\d\. Captain"), ACCENT, True),
+    (re.compile(r"\bOUT\b"), BAD, True),
+    (re.compile(r"\bIN\b"), GOOD, True),
+    (re.compile(r"Expected GW\d+ points: [\d.]+"), GOOD, True),
     (re.compile(r"\[bench\]"), DIM, False),
 ]
 

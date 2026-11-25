@@ -150,6 +150,20 @@ def availability(p: dict) -> float:
     return {"a": 1.0, "d": 0.5}.get(p.get("status", "a"), 0.0)
 
 
+def recovery_rate(p: dict) -> float:
+    """How quickly a flagged player's availability returns to normal, week by week
+    (fraction of the remaining doubt left after each gameweek). 0 = fit next week, 1 = never."""
+    status = p.get("status", "a")
+    news = (p.get("news") or "").lower()
+    if status in ("u", "n"):  # left the club / on loan / not in squad
+        return 1.0
+    if "unknown return" in news or "expected back" in news and "unknown" in news:
+        return 0.85
+    if status == "s":  # suspensions are short and predictable
+        return 0.3
+    return 0.6
+
+
 def reliability(p: dict, game: Game) -> float:
     """Share of finished gameweeks the player started (falls back to minutes)."""
     played = max(game.finished_gws, 1)
@@ -247,12 +261,15 @@ def project(p: dict, game: Game, gws: list[int]) -> list[float]:
     - recent output: 0.6*form + 0.4*points-per-game,
     both scaled by fixture difficulty and by how often the player starts.
     Doubles count twice, blanks score 0, and availability (chance of playing)
-    is assumed to recover over the following weeks for flagged players.
+    is assumed to recover over the following weeks for flagged players: quickly
+    for knocks and suspensions, slowly for injuries with an unknown return date,
+    never for players who have left (see `recovery_rate`).
     """
     avail = availability(p)
+    keep = recovery_rate(p)
     out = []
     for i, gw in enumerate(gws):
-        a = 1 - (1 - avail) * (0.6**i)
+        a = 1 - (1 - avail) * (keep**i)
         pts = sum(fixture_points(p, game, f["fdr"]) for f in game.fixtures_for(p["team"], gw))
         out.append(round(pts * a, 2))
     return out

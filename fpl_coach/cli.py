@@ -27,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--bank", type=float, help="Money in the bank in £m (read from FPL if omitted)")
     a.add_argument("--model", choices=["blend", "xg", "form"], default="blend",
                    help="Projection model: underlying stats + form (blend, default), xg only, or form only")
+    a.add_argument("--max-hits", type=int, default=1,
+                   help="Most -4 hits the plan may take (default 1, 0 = never take a hit)")
     a.add_argument("--no-review", action="store_true", help="Skip the season review (fewer API calls)")
     a.add_argument("--json", action="store_true", help="Print the report as JSON")
     a.add_argument("--no-cache", action="store_true", help="Always fetch fresh data")
@@ -45,6 +47,7 @@ def main(argv: list[str] | None = None, client: FPLClient | None = None) -> int:
             bank=args.bank,
             review=not args.no_review,
             model=args.model,
+            max_hits=max(0, args.max_hits),
         )
     except FPLError as e:
         print(f"error: {e}", file=sys.stderr)

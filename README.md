@@ -31,20 +31,22 @@
 
 ## What you get
 
-### 1. Squad health check
+### 1. Your plan for next gameweek
+A complete, ready-to-copy plan: **which transfers to make, who to start, the bench order and who to captain.**
+
+It searches every single transfer *and every pair of transfers*, so it finds moves like "sell an injured £7.6m striker for a £5.7m one, and use the money to upgrade a defender". Squads are judged by what they would actually score: the best starting XI plus captain in each of the next five gameweeks. Bench upgrades count for little, and the next few weeks count most. It only takes a **-4 hit when the gain clearly beats it** (by at least 2 points), and it saves your free transfer when nothing is worth making.
+
+<img src="docs/images/report-plan.png" alt="Gameweek plan with transfers, starting XI, bench order and captain" width="100%">
+
+### 2. Squad health check
 Every player in your 15 rated: form, the next five fixtures with difficulty, projected points, and a warning for anything that should worry you (injuries, players who rarely start, poor form, tough runs, blank gameweeks).
 
-<img src="docs/images/report-squad.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
-
-### 2. Best lineup, captain and transfers
-The highest-scoring XI you can field next gameweek, your bench order and captain options. It also searches every player in the game for the best transfers within your budget and the 3-per-club rule, and accounts for the -4 if you don't have a free transfer.
-
-<img src="docs/images/report-lineup-transfers.png" alt="Suggested lineup, captain and transfer ideas" width="100%">
+<img src="docs/images/report-squad-v2.png" alt="Squad health table with projected points, fixtures and warning flags" width="100%">
 
 ### 3. Chips and season review
 Which chips you still have and when they expire, upcoming double and blank gameweeks, and an honest look back: points lost to hits, points left on your bench, and your costliest captain calls.
 
-<img src="docs/images/report-chips-review.png" alt="Chip planner and season review" width="100%">
+<img src="docs/images/report-chips-review-v2.png" alt="Chip planner and season review" width="100%">
 
 > Screenshots are from a real 2026/27 team after Gameweek 11, anonymised.
 
@@ -83,6 +85,7 @@ That's it. The first run takes a few seconds while it downloads your season. Aft
 | `--horizon 6` | How many gameweeks to look ahead (default **5**) |
 | `--free-transfers 2` | Your free transfers. Estimated from your history if you leave it out |
 | `--bank 1.5` | Money in the bank in £m. Read from FPL if you leave it out |
+| `--max-hits 0` | Most -4 hits the plan may take (default **1**; `0` = never take a hit) |
 | `--model xg` | Projection model: `blend` (default), `xg` or `form`. See [How it works](#how-it-works) |
 | `--no-review` | Skip the season review (much faster, fewer requests) |
 | `--json` | Print everything as JSON, to feed your own tools |
@@ -93,6 +96,7 @@ Examples:
 ```bash
 fpl-coach analyze 1234567 --horizon 8          # plan further ahead
 fpl-coach analyze 1234567 --free-transfers 3   # you know better than the estimate
+fpl-coach analyze 1234567 --max-hits 0         # a plan that never costs you points
 fpl-coach analyze 1234567 --json > report.json # save the full report
 ```
 
@@ -111,7 +115,7 @@ Every upcoming fixture is scored by two models, blended **60% / 40%**:
 1. **Underlying stats.** What a player *should* score based on his expected goals (xG), expected assists (xA), his team's chance of a clean sheet, saves and defensive contributions, scored with FPL's own scoring rules. This sees through luck: a striker with lots of chances but no goals is rated as dangerous, not out of form.
 2. **Recent output.** What he *has* been scoring: form and points per game.
 
-Both are adjusted for the opponent's difficulty and for how often the player actually starts. Double gameweeks count twice, blank gameweeks score zero, and injured players are assumed to recover over the following weeks according to their chance of playing.
+Both are adjusted for the opponent's difficulty and for how often the player actually starts. Double gameweeks count twice and blank gameweeks score zero. Injured players come back gradually: quickly for knocks and suspensions, slowly when FPL lists the return date as unknown, and never for players who have left the club.
 
 <details>
 <summary><b>Show the exact formula</b></summary>
@@ -167,9 +171,10 @@ from fpl_coach import FPLClient, analyze_team
 
 report = analyze_team(FPLClient(), 1234567, horizon=5)
 
-print(report["lineup"]["captain"])          # the suggested captain
-for move in report["transfers"][:3]:
-    print(move["out"], "→", move["into"], f"+{move['gain']} pts")
+plan = report["plan"]
+for t in plan["transfers"]:
+    print("OUT", t["out"], "→ IN", t["into"])
+print("Captain:", plan["captain"], "| expected points:", plan["expected_points"])
 ```
 
 Or from the command line: `fpl-coach analyze 1234567 --json`.
@@ -195,9 +200,10 @@ FPL switches off its API while it updates between gameweeks. Try again in an hou
 ## Roadmap
 
 - [x] Squad health, lineup, captaincy, transfers, chips, season review
+- [x] Gameweek planner: best combination of transfers + starting XI + captain, hits only when worth it
 - [x] Underlying-stats model (xG, xA, clean sheets, saves, defensive contributions)
 - [ ] Team attack/defence strength instead of FDR, minutes prediction, cards
-- [ ] Two-transfer and wildcard optimiser
+- [ ] Wildcard and Free Hit squad builder
 - [ ] Mini-league comparison and effective ownership
 - [ ] Web app: paste your ID, get the report in your browser
 - [ ] MCP server, so Claude and other AI assistants can analyse your team
@@ -223,6 +229,7 @@ The project is small on purpose:
 |---|---|
 | `fpl_coach/api.py` | The only code that touches the network: fetching and caching |
 | `fpl_coach/analysis.py` | All the football logic, as pure functions: easy to test |
+| `fpl_coach/planner.py` | The gameweek planner: transfer search, lineup and captain |
 | `fpl_coach/coach.py` | Glues them together into one report |
 | `fpl_coach/report.py` · `cli.py` | Terminal output and command-line options |
 | `tests/` | A fake season that never calls the real API |
